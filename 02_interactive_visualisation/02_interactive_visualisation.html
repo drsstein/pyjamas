@@ -1,8 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <script src="https://cdn.jsdelivr.net/pyodide/v0.23.0/full/pyodide.js"></script>
-  <script src="pjs.js"></script>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
 </head>
 
 <body>
@@ -10,12 +9,50 @@
 <h2> Status</h2>
 <p id="status"></p>
 
-<h2>Interpreter</h2>
-<div id="terminal"></div>
+<h2>Canvas</h2>
+<canvas id="figure" width="800" height="400" style="border:1px solid #000000;"></canvas>
 
 <script>
-pjs.init("status");
-pjs.terminal("terminal");
+
+var bounds =  {x: 800, y: 400};
+var agent = {x: 0, y: 0};
+state = {bounds: bounds, agent: agent};
+
+function step() {
+    state.agent.x = (state.agent.x + 8) % state.bounds.x;
+    state.agent.y = (state.agent.y + 4) % state.bounds.y;
+}
+
+function clc(ctx, bounds) {
+    // clear canvas
+    ctx.fillStyle = "#000000";
+    ctx.fillRect(0, 0, bounds.x, bounds.y);
+}
+
+function draw_agent(ctx, agent) {
+    // , {x = 0, y = 0, radius = 20} ={}
+    ctx.strokeStyle = "#ff0000";
+    ctx.beginPath();
+    ctx.arc(agent.x, agent.y, 40, 0, 2 * Math.PI);
+    ctx.stroke();
+}
+
+function draw_state(canvas_id, state) {
+    //draw background
+    var canvas = document.getElementById(canvas_id);
+    var ctx = canvas.getContext("2d");
+    clc(ctx, state.bounds);
+    draw_agent(ctx, state.agent);
+}
+
+
+function tick() {
+    step();
+    draw_state("figure", state);
+}
+tick();
+setInterval(tick, 20);
+
 </script>
 
 </body>
