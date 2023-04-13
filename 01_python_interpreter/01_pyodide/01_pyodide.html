@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.23.0/full/pyodide.js"></script>
+</head>
+
+<body>
+
+<h1>Interactive Python</h1>
+<h2>Mouse animates pyplot</h2>
+
+<div id='figure1'></div>
+<p id="pyout"></p>
+
+<script>
+let initScript = `
+    import sys
+    sys.version
+`;
+
+let scripts = [
+    `
+    # from "http://glitch.com/~pyodide-example"
+    import numpy as np
+    import matplotlib
+    matplotlib.use("module://matplotlib_pyodide.html5_canvas_backend")
+    import matplotlib.pyplot as plt    
+    import js
+    from js import document
+
+    
+    fig, ax = plt.subplots()
+    fig.suptitle("1 period of a Sine wave")
+
+    def find_root_element(self):
+        return document.getElementById('figure1')
+        
+    # override create_root_element method of canvas
+    fig.canvas.create_root_element = find_root_element.__get__(
+        fig.canvas, fig.canvas.__class__)
+        
+    def update_figure(a=0, b=0):
+        ax.cla()
+        x = np.linspace(0, 2*np.pi, 100) + a
+        y = np.sin(x) + b
+        ax.plot(x, y)
+        
+    def show_message(message):
+        document.getElementById("pyout").innerHTML = message
+        
+    def update_plot_from_mouse(x, y, event):
+        show_message(x)
+        
+    def onmousemove(self, event):
+        x, y, button = self._convert_mouse_event(event)
+        # get axis-formatted x, y
+        # see https://github.com/matplotlib/matplotlib/blob/a378e8f353a7425d6fe3837054ad73c359947810/lib/matplotlib/backend_bases.py#L2962
+        #a = event.inaxes.format_xdata(event.xdata)
+        #b = event.inaxes.format_ydata(event.ydata)
+        #print(a, b)
+        #update_figure(a, b)
+        update_plot_from_mouse(x, y, event)
+        self.motion_notify_event(x, y, guiEvent=event)
+
+    fig.canvas.onmousemove = onmousemove.__get__(fig.canvas, fig.canvas.__class__)
+
+    update_figure()
+    fig.canvas.show()
+    `
+];
+let lineStart = '<br>>>> ';
+var pyodide = null;
+
+async function initPyodide(initScript){
+    document.getElementById("pyout").innerHTML = "Initializing Python...";
+    pyodide = await loadPyodide();
+    await pyodide.loadPackage("matplotlib");
+    output = pyodide.runPython(initScript);
+    document.getElementById("pyout").innerHTML = output;
+};
+
+async function runPython(initScript, scripts){
+    await initPyodide(initScript);
+    stdout = document.getElementById("pyout");
+    output = stdout.innerHTML;
+    scripts.forEach(function(script){
+        var lines = script.split("\n");
+        lines.forEach(function(scrpitLine){
+            output += lineStart + scrpitLine;
+        });
+        result = pyodide.runPython(script);
+        if (result != null) {
+            output += lineStart + result;
+        }
+    });
+    stdout.innerHTML = output;
+};
+
+runPython(initScript, scripts);
+
+</script>
+
+</body>
+</html>

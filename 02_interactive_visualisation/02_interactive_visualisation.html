@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.23.0/full/pyodide.js"></script>
+  <script src="pjs.js"></script>
+</head>
+
+<body>
+<h1>Interactive Python</h1>
+<h2> Status</h2>
+<p id="status"></p>
+
+<h2>Interpreter</h2>
+<div id="terminal"></div>
+
+<script>
+pjs.init("status");
+pjs.terminal("terminal");
+</script>
+
+</body>
+</html>
