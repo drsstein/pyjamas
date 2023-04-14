@@ -1,4 +1,8 @@
 // wrapper around pyodide for easy interaction with python from javascript
+var console = {log: console.log,
+               warn: console.warn,
+               error: console.error};
+
 var pjs = (function() {
     // private stuff
     
@@ -16,7 +20,7 @@ var pjs = (function() {
         //                  separated by "\n"
         //   flush (bool):  clear output before printing the *next* message.
         //   prefix (str):  every printed row will start with this string.
-        print(message, {flush = false, prefix = ""} = {}) {
+        print(message, {flush = false, prefix = "", is_error = false} = {}) {
             if (this.dom_id == null) {
                 // default to console output
                 console.log(message);
@@ -26,13 +30,29 @@ var pjs = (function() {
                 if (this.flush) {
                     html = ""
                 }
+                var new_html = "";
                 var lines = (message + "").split("\n");
                 lines.forEach(function (line) {
-                    html += prefix + line + '<br>';
+                    new_html += prefix + line + '<br>';
                 });
-                output.innerHTML = html;
+                if (is_error) {
+                    new_html = "<span style='color:red;'>" + new_html + "</span>";
+                }
+                output.innerHTML = html + new_html;
+                output.scrollTo(0, output.scrollHeight);
                 this.flush = flush;
             }
+        }
+        
+        // return callback print function with proper object binding
+        get_callback(options) {
+            return function(message){
+                return this.print(message, options);
+            }.bind(this);
+        }
+        
+        make_console(options) {
+            console.log = this.get_callback(options);
         }
     };
     
@@ -42,46 +62,61 @@ var pjs = (function() {
             //this.print = this.stdout.print;
         }
         
-        print(message, params) {
-            this.stdout.print(message, params);
-        }
-        
         // run a piece of python code; print result (default:true)
         // args:
         // script (str): python script to execute (can be multi-line string).
-        run = async function(script, {print_script = false, print_result = true, flush = false, out = this.stdout} = {}) {
+        // out (TextOutput): script and result output target.
+        // auto_install (bool): install all modules found in import statements.
+        run = async function(script, {print_script = false, 
+                                      print_result = true, 
+                                      flush = false, 
+                                      out = this.stdout,
+                                      auto_install = true} = {}) {
             if (print_script) {
-                out.print(script, {prefix: ">>> "});
+                console.log(script, {prefix: ">>> "});
             }
             try {
-                // separate !pip install lines from rest of code
+                // parse script for "!pip install" and import statements
                 var lines = (script + "").split("\n");
-                var modules = [];
+                var pip_installs = [];
+                var imports = [];
                 var py_script = "";
                 lines.forEach(function(line) {
                     if (line.startsWith("!pip install")) {
                         //catch and install packages
                         var line = line.replace("!pip install ", "");
                         var words = line.split(" ");
-                        modules = modules.concat(words);
+                        pip_installs = pip_installs.concat(words);
+                    } else if (line.startsWith("import") || line.startsWith("from")) {
+                        var rest = line.replace("import ", "");
+                        rest = rest.replace("from ", "");
+                        // split on space and comma (regular expression)
+                        var module = rest.split(/[\s.]+/)[0];
+                        imports.push(module);
+                        py_script += line + "\n";
                     } else {
                         py_script += line + "\n";
                     }
                 });
-                console.log(modules);
-                for (let i in modules) {
-                    await this.micropip.install(modules[i]);
+                // install modules
+                if (auto_install) {
+                    pip_installs = pip_installs.concat(imports);
                 }
+                if (pip_installs.length > 0) {
+                    await this.micropip.install(pip_installs);
+                    console.log("--- installation complete ---");
+                }
+
                 // run python script
                 const result = this.pyodide.runPython(py_script);
                 if ((result != null) && (print_result)) {
-                    out.print(result, {flush: flush});
+                    console.log(result, {flush: flush});
                 } else {
-                    out.print("None", {flush: flush});
+                    console.log("None", {flush: flush});
                 }
                 return result;
             } catch(err) {
-                out.print(err.message, {flush: flush, prefix:'ERR:'});
+                console.log(err.message, {flush: flush, is_error:true});
             }
         }
         
@@ -89,9 +124,10 @@ var pjs = (function() {
         // stdout: DOM ID of stdout
         init = async function(stdout=null) {
             this.stdout.dom_id = stdout;
-            this.print("Initializing python...", {flush: true});
+            this.stdout.make_console({flush:true});
+            console.log("Initializing python...", {flush: true});
             this.pyodide = await loadPyodide();
-            await this.pyodide.loadPackage("micropip");
+            await this.pyodide.loadPackage("micropip", {messageCallback: this.stdout.get_callback({flush:true})});
             this.micropip = this.pyodide.pyimport("micropip");
             const script = `
                 import sys
@@ -101,33 +137,68 @@ var pjs = (function() {
         }
         
         terminal(dom_id) {
+            // input text area
             var input_dom = document.createElement("textarea");
             input_dom.id = dom_id + "_input";
             input_dom.rows = 8;
             input_dom.cols = 80;
             input_dom.style.fontFamily = "monospace";
             
-            var status_dom = document.createElement("div");
+            // status line
+            var status_dom = document.createElement("span");
             status_dom.id = dom_id + "_status";
-            const default_status = "<br>Press Shift+Enter to run your script.";
+            const default_status = " or (Shift+Enter) to run your script.<br>";
             status_dom.innerHTML = default_status;
             
-            var output_dom = document.createElement("div");
+            // output area
+            var output_dom = document.createElement("p");
             output_dom.id = dom_id + "_output";
             output_dom.style.fontFamily = "monospace";
             
+            // load script button
+            var file_dom = document.createElement("input");
+            file_dom.type = "file";
+            file_dom.onchange = function() {
+                if (this.files && this.files[0]) {
+                    var file = this.files[0];
+                    var reader = new FileReader();
+                    reader.addEventListener('load', function (event) {
+                      input_dom.textContent = event.target.result;
+                    });
+                    reader.readAsBinaryString(file);
+                }   
+            };
+            
+            // output object
             var output = new TextOutput(output_dom.id);
-            input_dom.onkeydown = async function (event) {
+            
+            async function runScript() {
+                status_dom.innerHTML = 'busy...<br>';
+                output.make_console({flush:true});
+                await this.run(input_dom.value, {print_script: false, flush: true, out: output});
+                this.stdout.make_console();
+                status_dom.innerHTML = default_status;
+            }
+            
+            input_dom.onkeydown = function (event) {
                 if (event.key === "Enter" && event.shiftKey) {
                     event.preventDefault();
-                    status_dom.innerHTML = '<br>busy...';
-                    await this.run(input_dom.value, {print_script: true, flush: true, out: output});
-                    status_dom.innerHTML = default_status;
+                    runScript();
                 };
-            }.bind(this);
-            document.getElementById(dom_id).appendChild(output_dom);
-            document.getElementById(dom_id).appendChild(status_dom);
+            }
+            
+            // run button
+            var run_dom = document.createElement("buttoN");
+            run_dom.onclick = runScript.bind(this);
+            run_dom.appendChild(document.createTextNode("Run"));
+            
+            document.getElementById(dom_id).appendChild(file_dom);
+            document.getElementById(dom_id).appendChild(document.createElement("br"));
             document.getElementById(dom_id).appendChild(input_dom);
+            document.getElementById(dom_id).appendChild(document.createElement("br"));
+            document.getElementById(dom_id).appendChild(run_dom);
+            document.getElementById(dom_id).appendChild(status_dom);
+            document.getElementById(dom_id).appendChild(output_dom);
         }
     };
     
