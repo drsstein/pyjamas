@@ -68,7 +68,7 @@ var pjs = (function() {
         // out (TextOutput): script and result output target.
         // auto_install (bool): install all modules found in import statements.
         run = async function(script, {print_script = false, 
-                                      print_result = true, 
+                                      print_result = false, 
                                       flush = false, 
                                       out = this.stdout,
                                       auto_install = true} = {}) {
@@ -81,17 +81,23 @@ var pjs = (function() {
                 var pip_installs = [];
                 var imports = [];
                 var py_script = "";
+                const regex_pip = /\t*!pip install/;
+                const regex_from = /\t*from/
+                const regex_import = /\t*import/;
                 lines.forEach(function(line) {
-                    if (line.startsWith("!pip install")) {
+                    if (regex_pip.test(line)) {
                         //catch and install packages
-                        var line = line.replace("!pip install ", "");
-                        var words = line.split(" ");
+                        var line = line.split("!pip install")[1];
+                        var words = line.split(/, \t/);
                         pip_installs = pip_installs.concat(words);
-                    } else if (line.startsWith("import") || line.startsWith("from")) {
-                        var rest = line.replace("import ", "");
-                        rest = rest.replace("from ", "");
-                        // split on space and comma (regular expression)
-                        var module = rest.split(/[\s.]+/)[0];
+                    } else if (regex_from.test(line)) {
+                        var rest = line.split("from ")[1];
+                        var module = rest.split(/[\s. \t]+/)[0];
+                        imports.push(module);
+                        py_script += line + "\n";
+                    } else if (regex_import.test(line)) {
+                        var rest = line.split("import ")[1];
+                        var module = rest.split(/[\s. \t]+/)[0];
                         imports.push(module);
                         py_script += line + "\n";
                     } else {
@@ -108,11 +114,9 @@ var pjs = (function() {
                 }
 
                 // run python script
-                const result = this.pyodide.runPython(py_script);
-                if ((result != null) && (print_result)) {
+                const result = await this.pyodide.runPython(py_script);
+                if (print_result) {
                     console.log(result, {flush: flush});
-                } else {
-                    console.log("None", {flush: flush});
                 }
                 return result;
             } catch(err) {
@@ -124,16 +128,26 @@ var pjs = (function() {
         // stdout: DOM ID of stdout
         init = async function(stdout=null) {
             this.stdout.dom_id = stdout;
-            this.stdout.make_console({flush:true});
+            this.stdout.make_console({prefix: "<python>"});
             console.log("Initializing python...", {flush: true});
             this.pyodide = await loadPyodide();
-            await this.pyodide.loadPackage("micropip", {messageCallback: this.stdout.get_callback({flush:true})});
+            await this.pyodide.loadPackage("micropip", {messageCallback: this.stdout.get_callback()});
             this.micropip = this.pyodide.pyimport("micropip");
-            const script = `
+            const default_script = `
                 import sys
                 sys.version
             `;
-            await this.run(script);
+            await this.run(default_script, {auto_install:false, print_result: true});
+        }
+        
+        get = function(var_name) {
+            // split variable by '.' and do recursive access
+            const objects = var_name.split(".");
+            var output = this.pyodide.globals.get(objects[0]);
+            for (let i=1; i < objects.length; i++) {
+                output = output[objects[i]];
+            }
+            return output;
         }
         
         terminal(dom_id) {
@@ -175,7 +189,7 @@ var pjs = (function() {
             async function runScript() {
                 status_dom.innerHTML = 'busy...<br>';
                 output.make_console({flush:true});
-                await this.run(input_dom.value, {print_script: false, flush: true, out: output});
+                await this.run(input_dom.value, {print_script: false, print_result:true, flush: true, out: output});
                 this.stdout.make_console();
                 status_dom.innerHTML = default_status;
             }
@@ -183,9 +197,9 @@ var pjs = (function() {
             input_dom.onkeydown = function (event) {
                 if (event.key === "Enter" && event.shiftKey) {
                     event.preventDefault();
-                    runScript();
+                    runScript.bind(this)();
                 };
-            }
+            }.bind(this);
             
             // run button
             var run_dom = document.createElement("buttoN");
