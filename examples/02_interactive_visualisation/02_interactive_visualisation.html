@@ -9,7 +9,7 @@
 <body>
 <h1>Interactive Python</h1>
 <h2>Canvas</h2>
-<svg id="figure" width="800" height="800"></svg>
+<svg id="figure" width="800" height="800" style="border: 1px solid black;"></svg>
 
 <p id="output"></p>
 <div id="status""></div><br>
@@ -40,7 +40,6 @@ async function main_spring() {
     // todo: load from file inside pjs
     const init_script = `
 import numpy as np
-
 class MassSpringOscillator():
     
     def __init__(self, num_objects, bounds):
@@ -64,7 +63,16 @@ class MassSpringOscillator():
         f_total = f_spring + f_friction
         a = f_total / self.m
         self.v = self.v + self.dt * a
-        self.x = self.x + self.dt * self.v
+        x = self.x + self.dt * self.v
+        is_below = x < self.bounds[0]
+        x[is_below] = self.bounds[0] - x[is_below]
+        self.v[is_below] = -self.v[is_below]
+        
+        is_above = x > self.bounds[1]
+        x[is_above] = 2*self.bounds[1] - x[is_above]
+        self.v[is_above] = -self.v[is_above]
+        
+        self.x = x
         return self.x
         
 agent = MassSpringOscillator(num_objects=20, bounds=[0, 800])
@@ -76,7 +84,7 @@ agent.reset()
     // create object representations
     var svg = document.getElementById("figure");
     const num_objects = pjs.get("agent.num_objects");
-    const width = svg.getBBox().width;
+    const width = svg.width.baseVal.value; //svg.getBBox().width;
     const distance = Math.trunc( width / (num_objects + 1) );
     for (var i = 0; i < num_objects; i++) {
         var circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
