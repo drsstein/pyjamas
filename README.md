@@ -60,14 +60,10 @@ pjs.get('parent.child.child_of_child.var')
 pjs.pyodide
 ```
 
-# State of Play
+# Examples
+[A python interpreter in the browser](examples/01_python_interpreter/01_python_interpreter.html)
 
-What's there
-  - a simple interactive python interpreter with `!pip install` support.
-  - a hello world interactive example using mousemove to control a dynamical system in python, whose state is displayed in an <svg> using javascript.
-  
-What's planned
-  - lots of secretive exciting things..
+[An interactive animation with dynamics in python](examples/02_interactive_visualisation/02_interactive_visualisation.html)
 
 # Pyodide Cheatsheet
 
