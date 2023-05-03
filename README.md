@@ -8,20 +8,17 @@ Pyjamas is a thin wrapper around `pyodide`.
 
 Include `pjs.js` in your HTML file.
 
-## Python Terminal
-
+## Create a Python terminal
 ```
-pjs.terminal(<DOM element id>)
+pjs.terminal(<str: dom_id>)
 ```
 
-## Script Execution
-
-Write/ load your python script into a multi-line string.
-
+## Execute scripts stored in multi-line strings
 ```
-pjs.run(<script string>)
+pjs.run(<str: script>)
 ```
-Automatically installs required modules where the script contains any combination of the following:
+
+It automatically installs required modules where the script contains any combination of the following:
 
 ```
 # if you want to be explicit
@@ -34,6 +31,10 @@ import numpy
 from matplotlib import pyplot as plt 
 ```
 
+## Execute hosted script files
+```
+pjs.fetch_and_run(<str: script_url>)
+```
 
 ## Variables access in JavaScript
 
