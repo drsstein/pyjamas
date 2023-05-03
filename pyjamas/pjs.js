@@ -132,12 +132,13 @@ var pjs = (function() {
 		
 		// initialise python interface
         // stdout: DOM ID of stdout
-        init = async function(stdout=null) {
+        init = async function(stdout=null, stdout_args = {}) {
             this.stdout.dom_id = stdout;
-            this.stdout.make_console({prefix: "<python>"});
-            console.log("Initializing python...", {flush: true});
+			stdout_args['prefix'] = "[pjs] ";
+            this.stdout.make_console(stdout_args);
+            console.log("initializing python...");
             this.pyodide = await loadPyodide();
-            await this.pyodide.loadPackage("micropip", {messageCallback: this.stdout.get_callback()});
+            await this.pyodide.loadPackage("micropip", {messageCallback: this.stdout.get_callback({prefix: "[pyodide]"})});
             this.micropip = this.pyodide.pyimport("micropip");
             const default_script = `
                 import sys
