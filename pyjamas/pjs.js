@@ -124,7 +124,13 @@ var pjs = (function() {
             }
         }
         
-        // initialise python interface
+        fetch_and_run = async function(url, args = {}) {
+			var response = await fetch(url, {cache: "reload", headers: {"Content-Type": "application/text"}});
+			var text = await response.text();
+			await this.run(text, args);
+		}
+		
+		// initialise python interface
         // stdout: DOM ID of stdout
         init = async function(stdout=null) {
             this.stdout.dom_id = stdout;
