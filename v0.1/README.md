@@ -62,6 +62,7 @@ pjs.pyodide
 
 # Examples
 [A python interpreter in the browser](examples/01_python_interpreter/01_python_interpreter.html)
+
 [Interactive animation](examples/02_interactive_visualisation/02_interactive_visualisation.html)
 
 # Pyodide Cheatsheet
