@@ -6,11 +6,11 @@ class MassSpringOscillator():
         self.bounds = bounds
         self.k = 2. # spring constant
         self.b = 0.1 # damping constant
-        self.dt = 0.05 # simulation time per update call
+        self.dt = 0.1 # simulation time per update call
         
     def reset(self):
-        self.m = 0.5 + np.random.uniform(size=self.num_objects) * 2 # mass
-        self.x = 0 # position
+        self.m = 2. + np.random.uniform(size=self.num_objects) * 2 # mass
+        self.x = (self.bounds[1] + self.bounds[0])/2 + 0.1 * (self.bounds[1]-self.bounds[0])  # position
         self.v = 0 # velocity
         return self.x
         
@@ -35,5 +35,5 @@ class MassSpringOscillator():
         return self.x
         
 agent = MassSpringOscillator(num_objects=20, bounds=[0, 800])
-mouse = [0,400]
+user = [0,400]
 agent.reset()

@@ -16,8 +16,8 @@
 
 function update_simulation() {
     // update physics simulation
-    pjs.run("agent.step(mouse[1])").then(() => {
-            agent_positions = pjs.get("agent.x").toJs();
+    pjs.run("agent.step(user[1])").then(() => {
+            const agent_positions = pjs.get("agent.x").toJs();
             for (let i = 0; i < agent_positions.length; i++) {
                 agent = document.getElementById("agent_"+i);
                 agent.setAttribute("cy", Math.trunc( agent_positions[i] ));
@@ -33,10 +33,22 @@ async function main_spring() {
 	// display instructions
 	pjs.stdout.print("Can you stabilise invidiual balls via vertical mouse movements on the canvas?", {prefix: ""});
     
-    // create object representations
+	// create user representations
     var svg = document.getElementById("figure");
-    const num_objects = pjs.get("agent.num_objects");
     const width = svg.width.baseVal.value; //svg.getBBox().width;
+	var line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+	line.setAttribute("id", "user");
+	line.setAttribute("x1", 0);
+	line.setAttribute("x2", width);
+	
+	const userY = Math.trunc(pjs.get('user').toJs()[1]);
+	line.setAttribute("y1", userY);
+	line.setAttribute("y2", userY);
+	line.setAttribute("stroke", "gray");
+	svg.appendChild(line);
+	
+	// create object representations
+	const num_objects = pjs.get("agent.num_objects");
     const distance = Math.trunc( width / (num_objects + 1) );
     for (var i = 0; i < num_objects; i++) {
         var circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
@@ -51,16 +63,25 @@ async function main_spring() {
     
     //attach mouse callback to svg
     svg.onmousemove = function(event){
-        const box = event.currentTarget.getBoundingClientRect();
-        const mouse = [
-            event.clientX - box.left,
-            event.clientY - box.top
+        const amplification = 1.0;
+		const box = event.currentTarget.getBoundingClientRect();
+		const centerX = (box.left + box.right)/2;
+		const centerY = (box.bottom + box.top)/2;
+		const width = (box.right - box.left);
+		const height = (box.bottom - box.top);
+        const user = [
+            width/2 + amplification * (event.clientX - centerX),
+			height/2 + amplification * (event.clientY - centerY)
         ];
-        pjs.run("mouse = np.array([" + mouse.toString() + "])")
+        pjs.run("user = np.array([" + user.toString() + "])");
+		const userY = Math.trunc(user[1]);
+		line = document.getElementById("user");
+		line.setAttribute("y1", userY);
+		line.setAttribute("y2", userY);
     };
     
     // start update loop
-    setInterval(update_simulation, 10);
+    setInterval(update_simulation, 20);
 }
 
 main_spring();
