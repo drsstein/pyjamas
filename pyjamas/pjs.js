@@ -65,15 +65,12 @@ var pjs = (function() {
         // run a piece of python code; print result (default:true)
         // args:
         // script (str): python script to execute (can be multi-line string).
-        // out (TextOutput): script and result output target.
         // auto_install (bool): install all modules found in import statements.
         run = async function(script, {print_script = false, 
-                                      print_result = false, 
-                                      flush = false, 
-                                      out = this.stdout,
+                                      print_result = false,
                                       auto_install = true} = {}) {
             if (print_script) {
-                console.log(script, {prefix: ">>> "});
+                console.log(script);
             }
             try {
                 // parse script for "!pip install" and import statements
@@ -84,26 +81,38 @@ var pjs = (function() {
                 const regex_pip = /\t*!pip install/;
                 const regex_from = /\t*from/
                 const regex_import = /\t*import/;
-                lines.forEach(function(line) {
+                await lines.forEach(async function(line) {
                     if (regex_pip.test(line)) {
                         //catch and install packages
                         var line = line.split("!pip install")[1];
                         var words = line.split(/, \t/);
                         pip_installs = pip_installs.concat(words);
-                    } else if (regex_from.test(line)) {
-                        var rest = line.split("from ")[1];
-                        var module = rest.split(/[\s. \t]+/)[0];
-                        imports.push(module);
-                        py_script += line + "\n";
-                    } else if (regex_import.test(line)) {
-                        var rest = line.split("import ")[1];
-                        var module = rest.split(/[\s. \t]+/)[0];
-                        imports.push(module);
-                        py_script += line + "\n";
                     } else {
+                        // before doing anything else, append the line to the
+                        // executed script - else it might be inserted in wrong
+                        // order due to async function calls.
                         py_script += line + "\n";
+                        var module = null;
+                        if (regex_from.test(line)) {
+                            var rest = line.split("from ")[1];
+                            module = rest.split(/[\s. \t]+/)[0];
+                        } else if (regex_import.test(line)) {
+                            var rest = line.split("import ")[1];
+                            module = rest.split(/[\s. \t]+/)[0];
+                        }
+                        // try executing line and append if it fails
+                        if (module != null) {
+                            // try executing import and only install if import fails
+                            // this avoids trying to install standard libraries that
+                            // would throw a micropip error later.
+                            try {
+                                await this.pyodide.runPython(line);
+                            } catch(err) {
+                                imports.push(module);
+                            }
+                        }
                     }
-                });
+                }.bind(this));
                 // install modules
                 if (auto_install) {
                     pip_installs = pip_installs.concat(imports);
@@ -115,12 +124,13 @@ var pjs = (function() {
 
                 // run python script
                 const result = await this.pyodide.runPython(py_script);
+                console.log(result);
                 if (print_result) {
-                    console.log(result, {flush: flush});
+                    console.log(result);
                 }
                 return result;
             } catch(err) {
-                console.log(err.message, {flush: flush, is_error:true});
+                console.err(err.message);
             }
         }
         
@@ -157,23 +167,19 @@ var pjs = (function() {
             return output;
         }
         
-        terminal(dom_id) {
+        code_cell(dom_id, cell_id) {
+            // create a code cell inside a DOM element
+            
             // input text area
             var input_dom = document.createElement("textarea");
-            input_dom.id = dom_id + "_input";
+            input_dom.id = cell_id + "_input";
             input_dom.rows = 8;
             input_dom.cols = 80;
             input_dom.style.fontFamily = "monospace";
             
-            // status line
-            var status_dom = document.createElement("span");
-            status_dom.id = dom_id + "_status";
-            const default_status = " or (Shift+Enter) to run your script.<br>";
-            status_dom.innerHTML = default_status;
-            
             // output area
             var output_dom = document.createElement("p");
-            output_dom.id = dom_id + "_output";
+            output_dom.id = cell_id + "_output";
             output_dom.style.fontFamily = "monospace";
             
             // load script button
@@ -194,11 +200,9 @@ var pjs = (function() {
             var output = new TextOutput(output_dom.id);
             
             async function runScript() {
-                status_dom.innerHTML = 'busy...<br>';
                 output.make_console({flush:true});
-                await this.run(input_dom.value, {print_script: false, print_result:true, flush: true, out: output});
+                await this.run(input_dom.value, {print_script: false, print_result:false});
                 this.stdout.make_console();
-                status_dom.innerHTML = default_status;
             }
             
             input_dom.onkeydown = function (event) {
@@ -209,18 +213,67 @@ var pjs = (function() {
             }.bind(this);
             
             // run button
-            var run_dom = document.createElement("buttoN");
+            var run_dom = document.createElement("button");
             run_dom.onclick = runScript.bind(this);
             run_dom.appendChild(document.createTextNode("Run"));
             
-            document.getElementById(dom_id).appendChild(file_dom);
-            document.getElementById(dom_id).appendChild(document.createElement("br"));
-            document.getElementById(dom_id).appendChild(input_dom);
-            document.getElementById(dom_id).appendChild(document.createElement("br"));
-            document.getElementById(dom_id).appendChild(run_dom);
-            document.getElementById(dom_id).appendChild(status_dom);
-            document.getElementById(dom_id).appendChild(output_dom);
+            // delete button
+            var child = document.createElement("div");
+            var parent = document.getElementById(dom_id);
+            parent.appendChild(child);
+            
+            var del_dom = document.createElement("button");
+            del_dom.onclick = () => parent.removeChild(child);
+            del_dom.appendChild(document.createTextNode("X"));
+            
+            // up button
+            var up_dom = document.createElement("button");
+            up_dom.onclick = function() {
+                var my_position = Array.from(parent.children).indexOf(child);
+                parent.insertBefore(child, parent.children[Math.max(0, my_position-1)]);
+            };
+            up_dom.appendChild(document.createTextNode("^"));
+            
+            // down button
+            var down_dom = document.createElement("button");
+            down_dom.onclick = function() {
+                var my_position = Array.from(parent.children).indexOf(child);
+                parent.insertBefore(child, parent.children[my_position+2]);
+            };
+            down_dom.appendChild(document.createTextNode("v"));
+
+            child.appendChild(run_dom);
+            child.appendChild(up_dom);
+            child.appendChild(down_dom);
+            child.appendChild(del_dom);
+            child.appendChild(file_dom);
+            child.appendChild(document.createElement("br"));
+            child.appendChild(input_dom);
+            child.appendChild(document.createElement("br"));
+            child.appendChild(output_dom);
         }
+        
+        terminal = function(dom_id) {
+            // manage a list of code cells inside a dom element
+            
+            const parent = document.getElementById(dom_id)
+            parent.innerHTML = "<p>Click Run or press (Shift + Enter) to execute a cell.</p>";
+            var cell_div = document.createElement("div");
+            cell_div.id = dom_id + "_cells";
+            parent.appendChild(cell_div);
+            
+            var num_cells = 0;
+            var append = document.createElement("button");
+            append.onclick = function() {
+                this.code_cell(cell_div.id, num_cells++);
+            }.bind(this);
+            append.appendChild(document.createTextNode("New Cell"));
+            parent.appendChild(append);
+            
+            // create first cell
+            this.code_cell(cell_div.id, num_cells++);
+        }
+
     };
     
     // public
