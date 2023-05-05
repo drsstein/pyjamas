@@ -121,16 +121,14 @@ var pjs = (function() {
                     await this.micropip.install(pip_installs);
                     console.log("--- installation complete ---");
                 }
-
                 // run python script
                 const result = await this.pyodide.runPython(py_script);
-                console.log(result);
                 if (print_result) {
                     console.log(result);
                 }
                 return result;
             } catch(err) {
-                console.err(err.message);
+                console.error(err.message);
             }
         }
         
@@ -201,7 +199,7 @@ var pjs = (function() {
             
             async function runScript() {
                 output.make_console({flush:true});
-                await this.run(input_dom.value, {print_script: false, print_result:false});
+                await this.run(input_dom.value, {print_script: false, print_result:true});
                 this.stdout.make_console();
             }
             
