@@ -66,7 +66,15 @@ pjs.pyodide
 
 [An interactive animation with dynamics in python](examples/02_interactive_visualisation/02_interactive_visualisation.html)
 
-# Pyodide Cheatsheet
+# Development Cheatsheet
+
+## Server
+
+```
+(base): python -m http.server 8000
+```
+
+## Pyodide
 
 #### Initialization
 
